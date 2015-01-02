@@ -1,0 +1,632 @@
+%token Y_Void
+%token Y_Int
+%token Y_Double
+%token Y_Bool
+%token Y_String
+%token Y_Class
+%token Y_Interface
+%token Y_Null
+%token Y_This
+%token Y_Extends
+%token Y_Implements
+%token Y_For
+%token Y_While
+%token Y_If
+%token Y_Else
+%token Y_Return
+%token Y_Break
+%token Y_New
+%token Y_NewArray
+%token Y_Print
+%token Y_ReadInteger
+%token Y_ReadLine
+%token Y_BoolConstant
+%token Y_StringConstant
+%token Y_IntConstant
+%token Y_DoubleConstant
+%token Y_Identifier
+%token Y_TypeIdentifier
+%token Y_Plus
+%token Y_Minus
+%token Y_Times
+%token Y_Divide
+%token Y_Mod
+%token Y_Less
+%token Y_LessEqual
+%token Y_Greater
+%token Y_GreaterEqual
+%token Y_Assign
+%token Y_Equal
+%token Y_NotEqual
+%token Y_And
+%token Y_Or
+%token Y_Not
+%token Y_Semicolon
+%token Y_Comma
+%token Y_Dot
+%token Y_LBracket
+%token Y_RBracket
+%token Y_LParen
+%token Y_RParen
+%token Y_LBrace
+%token Y_RBrace
+
+%{
+#include <vector>
+#include <stack>
+#include <iostream>
+#include <cstdlib>
+#include <cstdio>
+#include "tokentype.h"
+#include "parsetree.h"
+
+  /* we are building parse trees */
+#define YYSTYPE ParseTree *
+
+using namespace std;
+
+ extern ParseTree *top;
+
+ ParseTree* makeBinExp(ParseTree* s1, ParseTree* s4);
+ stack<Token*> tokstack;
+ %}
+
+
+%left Y_Or
+%left Y_And
+%left Y_Equal
+%nonassoc Y_Assign Y_NotEqual
+%nonassoc Y_Less Y_Greater Y_LessEqual Y_GreaterEqual
+%left Y_Plus Y_Minus
+%left Y_Times Y_Divide Y_Mod
+%right Y_Not
+%right Y_LBracket Y_Dot
+
+%%
+
+%start program
+
+
+program: decls {
+   top = $$ = new ParseTree("program");
+   $$->addChild($1);
+};
+
+
+decls: decl {
+   top = $$ = new ParseTree("decls");
+   $$->addChild($1);
+   }
+       | decls decl {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+decl: variabledecl {
+   top = $$ = new ParseTree("decl");
+   $$->addChild($1);
+   }
+    | functiondecl {
+   top = $$ = new ParseTree("decl");
+   $$->addChild($1);
+   }
+    | classdecl {
+   top = $$ = new ParseTree("decl");
+   $$->addChild($1);
+   }
+    | interfacedecl {
+   top = $$ = new ParseTree("decl");
+   $$->addChild($1);
+   };
+
+variabledecl: variable Y_Semicolon {
+   top = $$ = new ParseTree("variabledecl");
+   $$->addChild($1);
+   };
+
+
+identifier: Y_Identifier {
+  top = $$ = new ParseTree(myTok);
+ };
+
+
+variable: type identifier {
+   top = $$ = new ParseTree("variable");
+   $$->addChild($1);
+   $$->addChild($2);
+   };
+
+
+type: Y_Int { top = $$ = new ParseTree(myTok); }
+    | Y_Double { top = $$ = new ParseTree(myTok); }
+    | Y_Bool { top = $$ = new ParseTree(myTok); }
+    | Y_String { top = $$ = new ParseTree(myTok); }
+    | Y_TypeIdentifier { top = $$ = new ParseTree(myTok); }
+    | type Y_LBracket Y_RBracket { $$ = $1; };
+
+
+functiondecl: type identifier Y_LParen formals Y_RParen stmtblock {
+   top = $$ = new ParseTree("functiondecl");
+   $$->addChild($1);
+   $$->addChild($2);
+   $$->addChild($4);
+   $$->addChild($6);
+   }
+            | Y_Void { tokstack.push(myTok); } identifier Y_LParen formals Y_RParen stmtblock {
+   top = $$ = new ParseTree("functiondecl");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   $$->addChild($5);
+   $$->addChild($7);
+   };
+
+
+variablelist: variable {
+   top = $$ = new ParseTree("variablelist");
+   $$->addChild($1);
+   }
+            | variablelist Y_Comma variable {
+   $1->addChild($3);
+   $$ = $1;
+   };
+
+
+formals: variablelist {
+   top = $$ = new ParseTree("formals");
+   $$->addChild($1);
+   }
+       |  {
+   top = $$ = new ParseTree("formals");
+   $$->addChild(new ParseTree("variablelist"));
+   };
+
+
+identifierlist: identifier {
+   top = $$ = new ParseTree("identifierlist");
+   $$->addChild($1);
+   }
+              | identifierlist Y_Comma identifier {
+   $1->addChild($3);
+   $$ = $1;
+   };
+
+
+nextends: extends { $$ = $1; }
+        |  { top = $$ = new ParseTree("extends"); };
+
+
+extends: Y_Extends { tokstack.push(myTok); } identifier {
+   top = $$ = new ParseTree("extends");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   };
+
+
+nimplements: implements { $$ = $1; }
+           |  { top = $$ = new ParseTree("implements"); };
+
+
+implements: Y_Implements { tokstack.push(myTok); } identifierlist {
+   top = $$ = new ParseTree("implements");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   };
+
+
+nfields: fields { $$ = $1; }
+       |  { top = $$ = new ParseTree("fields"); };
+
+
+fields: field {
+   top = $$ = new ParseTree("fields");
+   $$->addChild($1);
+   }
+      | fields field {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+classdecl: Y_Class { tokstack.push(myTok); } identifier nextends nimplements Y_LBrace nfields Y_RBrace {
+   top = $$ = new ParseTree("classdecl");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   $$->addChild($4);
+   $$->addChild($5);
+   $$->addChild($7);
+   };
+
+
+field: variabledecl { $$ = $1; }
+     | functiondecl { $$ = $1; };
+
+
+nprototypes: prototypes { $$ = $1; }
+           |  { top = $$ = new ParseTree("prototypes"); }
+
+
+prototypes: prototype {
+   top = $$ = new ParseTree("prototypes");
+   $$->addChild($1);
+   }
+          | prototypes prototype {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+interfacedecl: Y_Interface { tokstack.push(myTok); } identifier Y_LBrace nprototypes Y_RBrace {
+   top = $$ = new ParseTree("interfacedecl");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   $$->addChild($5);
+   };
+
+
+prototype: type identifier Y_LParen formals Y_RParen Y_Semicolon {
+   top = $$ = new ParseTree("prototype");
+   $$->addChild($1);
+   $$->addChild($2);
+   $$->addChild($4);
+   }
+         | Y_Void { tokstack.push(myTok); } identifier Y_LParen formals Y_RParen Y_Semicolon {
+   top = $$ = new ParseTree("prototype");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   $$->addChild($5);
+   };
+
+
+variabledecls: variabledecl {
+   top = $$ = new ParseTree("variabledecls");
+   $$->addChild($1);
+   }
+             | variabledecls variabledecl {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+stmts: stmt {
+   top = $$ = new ParseTree("stmts");
+   $$->addChild($1);
+   }
+     | stmts stmt {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+nvariabledecls: variabledecls { $$ = $1; }
+              | { top = $$ = new ParseTree("variabledecls"); };
+
+
+nstmts: stmts { $$ = $1; }
+      | { top = $$ = new ParseTree("stmts"); };
+
+
+stmtblock: Y_LBrace nvariabledecls nstmts Y_RBrace {
+   top = $$ = new ParseTree("stmtblock");
+   $$->addChild($2);
+   $$->addChild($3);
+   };
+
+
+open_stmt: open_if { $$ = $1; }
+         | open_while { $$ = $1; }
+         | open_for { $$ = $1; };
+
+matched_stmt: matched_if  { $$ = $1; }
+            | matched_while { $$ = $1; }
+            | matched_for { $$ = $1; }
+            | other_stmt { $$ = $1; };
+
+other_stmt: nexpr Y_Semicolon { $$ = $1; }
+          | printstmt  { $$ = $1; }
+          | returnstmt  { $$ = $1; }
+          | breakstmt  { $$ = $1; }
+          | stmtblock  { $$ = $1; };
+
+
+stmt: matched_stmt {
+   top = $$ = new ParseTree("stmt");
+   $$->addChild($1);
+   }
+    | open_stmt {
+   top = $$ = new ParseTree("stmt");
+   $$->addChild($1);
+   };
+
+
+commonif: Y_If Y_LParen expr Y_RParen {
+   top = $$ = new ParseTree("ifstmt");
+   $$->addChild($3);
+   };
+
+matched_if: commonif matched_stmt Y_Else matched_stmt {
+   $1->addChild($2);
+   $1->addChild($4);
+   $$ = $1;
+   };
+
+open_if: commonif stmt {
+   $1->addChild($2);
+   $$ = $1;
+   }
+       | commonif matched_stmt Y_Else open_stmt {
+   $1->addChild($2);
+   $1->addChild($4);
+   $$ = $1;
+   };
+
+
+commonwhile: Y_While Y_LParen expr Y_RParen {
+   top = $$ = new ParseTree("whilestmt");
+   $$->addChild($3);
+   };
+
+matched_while: commonwhile matched_stmt {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+open_while: commonwhile open_stmt {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+commonfor: Y_For Y_LParen nexpr Y_Semicolon expr Y_Semicolon nexpr Y_RParen {
+   top = $$ = new ParseTree("forstmt");
+   $$->addChild($3);
+   $$->addChild($5);
+   $$->addChild($7);
+   };
+
+matched_for: commonfor matched_stmt {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+open_for: commonfor open_stmt {
+   $1->addChild($2);
+   $$ = $1;
+   };
+
+
+returnstmt: Y_Return { tokstack.push(myTok); } nexpr Y_Semicolon {
+   top = $$ = new ParseTree("returnstmt");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   };
+
+
+breakstmt: Y_Break { tokstack.push(myTok); } Y_Semicolon {
+   top = $$ = new ParseTree("breakstmt");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   };
+
+
+printstmt: Y_Print { tokstack.push(myTok); } Y_LParen exprlist Y_RParen Y_Semicolon {
+   top = $$ = new ParseTree("printstmt");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($4);
+   };
+
+
+exprlist: expr {
+   top = $$ = new ParseTree("exprlist");
+   $$->addChild($1);
+   }
+        | exprlist Y_Comma expr {
+   $1->addChild($3);
+   $$ = $1;
+   };
+
+nexpr: expr { $$ = $1; }
+     |  { $$ = NULL; };
+
+
+expr: lvalue Y_Assign { tokstack.push(myTok); } expr {
+   top = $$ = new ParseTree("assign");
+   $$->addChild($1);
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($4);
+   }
+    | constant {
+   top = $$ = $1;
+   }
+    | lvalue {
+      top = $$ = $1;
+   }
+    | Y_This {
+   top = $$ = new ParseTree("this");
+   $$->addChild(new ParseTree(myTok));
+   }
+    | call {
+   top = $$ = $1;
+   }
+    | Y_LParen expr Y_RParen {
+   top = $$ = $2;
+   }
+    | expr Y_Plus { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Minus { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Times { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Divide { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Mod { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | Y_Minus { tokstack.push(myTok); } expr {
+   top = $$ = new ParseTree("unexpr");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   }
+    | expr Y_Less { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Greater { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_LessEqual { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_GreaterEqual { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Equal { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_NotEqual { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_And { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | expr Y_Or { tokstack.push(myTok); } expr {
+   top = $$ = makeBinExp($1, $4);
+   }
+    | Y_Not { tokstack.push(myTok); } expr {
+   top = $$ = new ParseTree("unexpr");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($3);
+   }
+    | Y_ReadInteger { tokstack.push(myTok); } Y_LParen Y_RParen {
+   top = $$ = new ParseTree("readinteger");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   }
+    | Y_ReadLine { tokstack.push(myTok); } Y_LParen Y_RParen {
+   top = $$ = new ParseTree("readline");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   }
+    | Y_New { tokstack.push(myTok); } Y_LParen identifier  Y_RParen {
+   top = $$ = new ParseTree("new");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($4);
+   }
+    | Y_NewArray { tokstack.push(myTok); } Y_LParen expr Y_Comma type Y_RParen {
+   top = $$ = new ParseTree("expr");
+   $$->addChild(new ParseTree(tokstack.top()));
+   tokstack.pop();
+   $$->addChild($4);
+   $$->addChild($6);
+   };
+
+
+lvalue: identifier {
+   top = $$ = new ParseTree("identifier");
+   $$->addChild($1);
+   }
+      | expr Y_Dot identifier {
+   top = $$ = new ParseTree("varacc");
+   $$->addChild($1);
+   $$->addChild($3);
+   }
+      | expr Y_LBracket expr Y_RBracket {
+   top = $$ = new ParseTree("arracc");
+   $$->addChild($1);
+   $$->addChild($3);
+   };
+
+
+_identifier: identifier {
+   top = $$ = new ParseTree("identifier");
+   $$->addChild($1);
+   };
+
+
+call: _identifier Y_LParen actuals Y_RParen {
+   top = $$ = new ParseTree("functioncall");
+   $$->addChild($1);
+   $$->addChild($3);
+   }
+    | expr Y_Dot _identifier Y_LParen actuals Y_RParen {
+   top = $$ = new ParseTree("methodcall");
+   $$->addChild($1);
+   $$->addChild($3);
+   $$->addChild($5);
+   };
+
+
+actuals: exprlist {
+   top = $$ = new ParseTree("actuals");
+   $$->addChild($1);
+   }
+       |  {
+   top = $$ = new ParseTree("actuals"); 
+   $$->addChild(new ParseTree("exprlist"));
+   };
+
+
+constant: Y_IntConstant {
+   top = $$ = new ParseTree("constant");
+   $$->addChild(new ParseTree(myTok));
+   }
+        | Y_DoubleConstant {
+   top = $$ = new ParseTree("constant");
+   $$->addChild(new ParseTree(myTok));
+   }
+        | Y_BoolConstant {
+   top = $$ = new ParseTree("constant");
+   $$->addChild(new ParseTree(myTok));
+   }
+        | Y_StringConstant {
+   top = $$ = new ParseTree("constant");
+   $$->addChild(new ParseTree(myTok));
+   }
+        | Y_Null {
+   top = $$ = new ParseTree("constant");
+   $$->addChild(new ParseTree(myTok));
+   };
+
+%%
+
+int yyerror(const char * s)
+{
+  fprintf(stderr, "%s\n", s);
+  return 0;
+}
+
+
+ParseTree* makeBinExp(ParseTree* s1, ParseTree* s4)
+{
+  ParseTree *result = new ParseTree("binexpr");
+  ParseTree *oper = new ParseTree(tokstack.top());
+  tokstack.pop();
+  result->addChild(s1);
+  result->addChild(oper);
+  result->addChild(s4);
+  return result;
+}
+
+/*
+int main() {
+  yyparse();
+  traverseTree(top, 0, 0);
+  //cout << top->toString() << endl;
+  return 0;
+}
+*/
